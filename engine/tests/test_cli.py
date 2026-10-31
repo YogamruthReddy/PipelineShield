@@ -329,7 +329,7 @@ class TestMarkdownOutput:
             "--summary-md", str(md_path),
         ])
         assert md_path.exists()
-        content = md_path.read_text()
+        content = md_path.read_text(encoding="utf-8")
         assert "PipelineShield" in content
 
     def test_markdown_not_written_without_flag(self, tmp_path):

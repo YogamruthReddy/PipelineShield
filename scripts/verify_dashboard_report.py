@@ -16,6 +16,24 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Guarded UTF-8 stdout reconfiguration for cross-platform console compatibility (e.g. Windows cp1252)
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _get_check_symbol() -> str:
+    try:
+        "✓".encode(sys.stdout.encoding or "utf-8")
+        return "✓"
+    except Exception:
+        return "[OK]"
+
+
+CHECK = _get_check_symbol()
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ENGINE_DIR = ROOT_DIR / "engine"
 FIXTURES_DIR = ENGINE_DIR / "tests" / "fixtures"
@@ -140,7 +158,7 @@ def test_cli_report_generation_and_compatibility():
 
     # Clean up test output
     out_file.unlink(missing_ok=True)
-    print("      ✓ Dashboard schema and finding retention validated successfully.")
+    print(f"      {CHECK} Dashboard schema and finding retention validated successfully.")
 
 
 def test_clean_scan_exit_code():
@@ -151,7 +169,7 @@ def test_clean_scan_exit_code():
         "--dependency-review", str(FIXTURES_DIR / "dep_review_official_added_clean.json"),
     )
     assert proc.returncode == 0, f"Expected exit 0 for clean scan, got {proc.returncode}. stderr: {proc.stderr}"
-    print("      ✓ Clean scan exited with code 0.")
+    print(f"      {CHECK} Clean scan exited with code 0.")
 
 
 def test_vulnerable_scan_exit_code():
@@ -160,7 +178,7 @@ def test_vulnerable_scan_exit_code():
         "--trivy", str(FIXTURES_DIR / "trivy_vulnerabilities.json"),
     )
     assert proc.returncode == 1, f"Expected exit 1 for vulnerable scan, got {proc.returncode}"
-    print("      ✓ Vulnerable scan exited with code 1.")
+    print(f"      {CHECK} Vulnerable scan exited with code 1.")
 
 
 def test_malformed_input_exit_code():
@@ -169,7 +187,7 @@ def test_malformed_input_exit_code():
         "--trivy", str(FIXTURES_DIR / "malformed.json"),
     )
     assert proc.returncode == 2, f"Expected exit 2 for malformed input, got {proc.returncode}"
-    print("      ✓ Malformed input exited with code 2.")
+    print(f"      {CHECK} Malformed input exited with code 2.")
 
 
 def test_typescript_dashboard_contract():
@@ -177,7 +195,7 @@ def test_typescript_dashboard_contract():
     node_cmd = ["node", "--experimental-strip-types", str(ROOT_DIR / "scripts" / "test_dashboard_contract.mjs")]
     res = subprocess.run(node_cmd, cwd=ROOT_DIR, capture_output=True, text=True)
     assert res.returncode == 0, f"TypeScript dashboard contract test failed:\n{res.stderr}\n{res.stdout}"
-    print("      ✓ TypeScript validator passed all real reports and rejected malformed vectors.")
+    print(f"      {CHECK} TypeScript validator passed all real reports and rejected malformed vectors.")
 
 
 def main():
