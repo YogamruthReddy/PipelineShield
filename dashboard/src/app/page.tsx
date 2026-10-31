@@ -6,6 +6,7 @@ import {
   EvaluationResult,
   ProcessedFinding,
   DashboardView,
+  LiveRunInfo,
 } from "@/types/dashboard";
 import { SAMPLE_REPORTS } from "@/data/sample-reports";
 import { validateReportSchema } from "@/lib/report-validator";
@@ -19,7 +20,7 @@ import { PolicyView } from "@/components/views/PolicyView";
 import { ReportsView } from "@/components/views/ReportsView";
 import { RunsView } from "@/components/views/RunsView";
 import { SettingsView } from "@/components/views/SettingsView";
-import { X } from "lucide-react";
+import { X, AlertTriangle } from "lucide-react";
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<DashboardView>("overview");
@@ -31,6 +32,11 @@ export default function Home() {
   const [customReport, setCustomReport] = useState<EvaluationResult | null>(null);
   const [customFileName, setCustomFileName] = useState<string>("");
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Live GitHub sync state
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [liveRunInfo, setLiveRunInfo] = useState<LiveRunInfo | null>(null);
 
   // Search & interaction state
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -51,13 +57,13 @@ export default function Home() {
 
   // Active report data
   const currentResult: EvaluationResult = useMemo(() => {
-    if (activeReportKey === "custom" && customReport) {
+    if ((activeReportKey === "custom" || activeReportKey === "live") && customReport) {
       return customReport;
     }
     return SAMPLE_REPORTS[activeReportKey]?.data || SAMPLE_REPORTS.vulnerable.data;
   }, [activeReportKey, customReport]);
 
-  const isDemoActive = activeReportKey !== "custom";
+  const isDemoActive = activeReportKey !== "custom" && activeReportKey !== "live";
 
   // Combine and normalize all findings across categories:
   const allFindings = useMemo<ProcessedFinding[]>(() => {
@@ -125,6 +131,36 @@ export default function Home() {
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  // Handle live report sync from GitHub Actions
+  const handleSyncLiveReport = async () => {
+    setSyncError(null);
+    setUploadError(null);
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/latest-report?refresh=true");
+      const data = await res.json();
+      if (res.ok && data.success && data.report) {
+        setCustomReport(data.report);
+        setLiveRunInfo({
+          run: data.run,
+          artifact: data.artifact,
+          fetchedAt: data.fetched_at,
+        });
+        setActiveReportKey("live");
+      } else {
+        setSyncError(data.error || "Failed to retrieve report from GitHub Actions.");
+      }
+    } catch (err) {
+      setSyncError(
+        err instanceof Error
+          ? err.message
+          : "Network failure while reaching live sync API route."
+      );
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const sampleKeys = [
@@ -230,12 +266,40 @@ export default function Home() {
           onSelectSample={(k) => {
             setActiveReportKey(k);
             setUploadError(null);
+            setSyncError(null);
           }}
           sampleKeys={sampleKeys}
+          onSyncLive={handleSyncLiveReport}
+          isSyncing={isSyncing}
+          liveRunInfo={liveRunInfo}
         />
 
         {/* View Content Workspace */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto">
+          {/* Sync Error Notice Banner */}
+          {syncError && (
+            <div className="mb-4 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start justify-between gap-3 shadow-2xs">
+              <div className="space-y-1">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Live CI Sync Notice</span>
+                </div>
+                <p className="text-amber-800 dark:text-amber-300">{syncError}</p>
+                <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                  Tip: You can always load reports offline via the <strong>Load Report</strong> button or inspect the bundled demonstration datasets.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncError(null)}
+                className="cursor-pointer p-1 rounded-md text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
+                aria-label="Dismiss notice"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {currentView === "overview" && (
             <OverviewView
               report={currentResult}
@@ -282,7 +346,11 @@ export default function Home() {
           )}
 
           {currentView === "runs" && (
-            <RunsView report={currentResult} isDemoActive={isDemoActive} />
+            <RunsView
+              report={currentResult}
+              isDemoActive={isDemoActive}
+              liveRunInfo={liveRunInfo}
+            />
           )}
 
           {currentView === "settings" && <SettingsView />}

@@ -12,6 +12,7 @@ Verifies:
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -37,7 +38,19 @@ CHECK = _get_check_symbol()
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ENGINE_DIR = ROOT_DIR / "engine"
 FIXTURES_DIR = ENGINE_DIR / "tests" / "fixtures"
-PYTHON = sys.executable
+def get_python_executable() -> str:
+    if os.environ.get("PYTHON") and Path(os.environ["PYTHON"]).exists():
+        return os.environ["PYTHON"]
+    venv_win = ENGINE_DIR / ".venv" / "Scripts" / "python.exe"
+    venv_posix = ENGINE_DIR / ".venv" / "bin" / "python"
+    if venv_win.exists():
+        return str(venv_win)
+    if venv_posix.exists():
+        return str(venv_posix)
+    return sys.executable
+
+
+PYTHON = get_python_executable()
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess:

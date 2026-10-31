@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { EvaluationResult } from "@/types/dashboard";
+import { EvaluationResult, LiveRunInfo } from "@/types/dashboard";
 import { VerdictBadge } from "../VerdictBadge";
 import { ViewHeader } from "../common/ViewHeader";
 import {
@@ -13,14 +13,16 @@ import {
   Radio,
   Workflow,
   FolderGit2,
+  ExternalLink,
 } from "lucide-react";
 
 interface RunsViewProps {
   report: EvaluationResult;
   isDemoActive: boolean;
+  liveRunInfo?: LiveRunInfo | null;
 }
 
-export function RunsView({ report, isDemoActive }: RunsViewProps) {
+export function RunsView({ report, isDemoActive, liveRunInfo }: RunsViewProps) {
   const steps = [
     {
       name: "Checkout Source Code",
@@ -80,8 +82,19 @@ export function RunsView({ report, isDemoActive }: RunsViewProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center space-x-2">
             <Workflow className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              GitHub Actions Workflow Run #412
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <span>GitHub Actions Workflow Run #{liveRunInfo?.run.id ?? 412}</span>
+              {liveRunInfo?.run.html_url && (
+                <a
+                  href={liveRunInfo.run.html_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors inline-flex items-center"
+                  title="View run on GitHub Actions"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
             </h2>
           </div>
           <VerdictBadge decision={report.decision} size="sm" />
@@ -100,7 +113,11 @@ export function RunsView({ report, isDemoActive }: RunsViewProps) {
             <span className="text-slate-400 dark:text-slate-500 text-[10px] font-mono uppercase block">Branch / Event</span>
             <div className="font-mono text-slate-900 dark:text-slate-100 font-semibold truncate flex items-center gap-1">
               <GitBranch className="w-3.5 h-3.5 text-slate-400" />
-              <span>{report.branch || "main"} (pull_request)</span>
+              <span>
+                {liveRunInfo
+                  ? `${liveRunInfo.run.head_branch} (${liveRunInfo.run.event})`
+                  : `${report.branch || "main"} (pull_request)`}
+              </span>
             </div>
           </div>
 
@@ -108,15 +125,25 @@ export function RunsView({ report, isDemoActive }: RunsViewProps) {
             <span className="text-slate-400 dark:text-slate-500 text-[10px] font-mono uppercase block">Commit SHA</span>
             <div className="font-mono text-slate-900 dark:text-slate-100 font-semibold truncate flex items-center gap-1">
               <GitCommit className="w-3.5 h-3.5 text-slate-400" />
-              <span>{report.commit_sha || "f6906bc"}</span>
+              <span>
+                {liveRunInfo
+                  ? liveRunInfo.run.head_sha.slice(0, 7)
+                  : (report.commit_sha || "f6906bc")}
+              </span>
             </div>
           </div>
 
           <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-1">
-            <span className="text-slate-400 dark:text-slate-500 text-[10px] font-mono uppercase block">Triggered Timestamp</span>
+            <span className="text-slate-400 dark:text-slate-500 text-[10px] font-mono uppercase block">
+              {liveRunInfo ? "Retrieved At" : "Triggered Timestamp"}
+            </span>
             <div className="font-mono text-slate-900 dark:text-slate-100 text-[11px] truncate flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{report.evaluated_at || "2026-10-30T18:00:00Z"}</span>
+              <span>
+                {liveRunInfo
+                  ? new Date(liveRunInfo.fetchedAt).toLocaleTimeString()
+                  : (report.evaluated_at || "2026-10-30T18:00:00Z")}
+              </span>
             </div>
           </div>
         </div>

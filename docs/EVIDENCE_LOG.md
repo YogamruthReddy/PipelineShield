@@ -69,6 +69,62 @@ This log records verifiable milestones, test results, visual evidence, and imple
 
 ---
 
+### Milestone: Live GitHub Actions CI Report Ingestion & Sync
+- **Date**: 2026-10-31
+- **Branch**: `feat/multi-view-secops-dashboard`
+- **Scope**: Server-side artifact discovery, in-memory ZIP decompression, deterministic workflow targeting, and TopBar live sync integration
+
+#### 1. Purpose & Architecture
+- Implemented secure server-side live ingestion via `GET /api/latest-report` and `lib/github-ingestion.ts` targeting canonical repository `YogamruthReddy/PipelineShield`.
+- Enforces strict deterministic workflow selection: queries completed runs for `security-gate.yml` (`CI Security Gate`) and retrieves the `security-summary-reports` artifact without silent fallbacks.
+- Pure in-memory ZIP decompression (`lib/zip-extractor.ts`) eliminates filesystem disk I/O, prevents Zip Slip vulnerabilities, and enforces safety bounds (10MB archive cap, 5MB entry cap).
+- Auth token (`GITHUB_TOKEN`) is managed strictly server-side and is never returned in client payloads, headers, or error messages.
+- Added "Sync CI Run" action in `TopBar.tsx` alongside existing "Load Report" file upload, displaying `Live CI Run #<id>` in emerald with links to GitHub Actions run telemetry.
+
+#### 2. Verification Results
+| Check | Command | Result | Exit Code |
+|---|---|:---:|:---:|
+| Live Ingestion Tests | `npm run test:ingestion --prefix dashboard` | PASS (28/28) | 0 |
+| Dashboard Contract | `npm run test:contract --prefix dashboard` | PASS (10/10) | 0 |
+| Dashboard Navigation | `npm run test:nav --prefix dashboard` | PASS (7/7) | 0 |
+| Dashboard ESLint | `npm run lint --prefix dashboard` | PASS (0 errors, 0 warnings) | 0 |
+| Next.js Production Build | `npm run build --prefix dashboard -- --webpack` | PASS (`/`, `/api/health`, `/api/latest-report`) | 0 |
+| Report Verifier | `python scripts/verify_dashboard_report.py` | PASS (5/5) | 0 |
+| Python Engine Tests | `pytest engine/tests -q` | PASS (261/261) | 0 |
+| Whitespace Hygiene | `git diff --check` | PASS (clean) | 0 |
+
+---
+
+### Milestone: GitHub Pull Request #1 CI Security Gate & Dependency Graph Resolution
+- **Date**: 2026-10-31
+- **Branch**: `feat/multi-view-secops-dashboard`
+- **Head Commit SHA**: `4fa63091a6ef3e53116741187be5358229a27cfe`
+- **Pull Request**: [#1 (`feat/multi-view-secops-dashboard` -> `main`)](https://github.com/YogamruthReddy/PipelineShield/pull/1)
+- **Workflow Run**: [Run #41229569501 (Attempt 2)](https://github.com/YogamruthReddy/PipelineShield/actions/runs/41229569501)
+
+#### 1. Purpose & Incident Resolution
+- **Issue**: PR #1 run attempt 1 failed on the `DevSecOps Policy Enforcement Gate` job at step `Run GitHub Dependency Review` with an API error indicating Dependency Graph was disabled.
+- **Resolution**: Enabled Dependency Graph in repository settings (**Settings** -> **Code security and analysis** -> **Dependency graph**), then triggered a rerun of failed jobs (Attempt 2).
+- **Result**: All three remote CI jobs passed with `success`, creating a green gate on PR #1.
+
+#### 2. Remote CI Verification Details
+| Remote CI Job | Run ID / Job ID | Status | Conclusion | Key Verifications |
+|---|---|:---:|:---:|---|
+| **Engine Unit & Coverage Tests** | `124630776703` | Completed | SUCCESS | Pytest 261/261 passed; test coverage uploaded |
+| **Dashboard Verification** | `124630776810` | Completed | SUCCESS | Contract tests (10/10), Nav tests (7/7), ESLint (0 errors), Next.js production build |
+| **DevSecOps Policy Gate** | `124631016794` | Completed | SUCCESS | Trivy, Semgrep, and Dependency Review all COMPLETED; 0 blocking findings; gate decision **PASS** |
+
+#### 3. Uploaded Artifacts
+- `security-summary-reports` (ID: `13053919772`, 6,572 bytes, expires 2026-11-14)
+- `engine-coverage` (ID: `13053989128`, 2,946 bytes, expires 2026-11-07)
+
+#### 4. Scope Boundaries & Next Steps
+- **Branch Protection**: Branch protection rules on `main` remain unconfigured (`protected: False` via API). Rules requiring PR approval and required status checks must be configured before merging.
+- **`main` Preservation**: `main` remains untouched at `ca17407`; no merge or deployment has occurred.
+- **Dashboard Data Separation**: Dashboard currently loads synthetic demo scenarios and manually uploaded reports. Live in-app syncing from GitHub Actions runs is a separate unfinished capability being developed on `feat/live-github-report-ingestion`.
+
+---
+
 ### Milestone: Three-Tier Typography Architecture & UI/UX Elevation
 - **Date**: 2026-10-31
 - **Branch**: `feat/multi-view-secops-dashboard`

@@ -62,3 +62,26 @@ export interface SampleReportItem {
   data: EvaluationResult;
 }
 
+export interface LiveRunInfo {
+  run: {
+    id: number;
+    name: string;
+    status: string;
+    conclusion: string | null;
+    html_url: string;
+    head_sha: string;
+    head_branch: string;
+    event: string;
+    created_at: string;
+    updated_at: string;
+  };
+  artifact?: {
+    id?: number;
+    name: string;
+    size_in_bytes?: number;
+    expired: boolean;
+    created_at?: string;
+  };
+  fetchedAt: string;
+}
+

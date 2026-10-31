@@ -88,6 +88,10 @@ jobs:
         working-directory: dashboard
         run: npm run test:nav
 
+      - name: Run Dashboard Live Ingestion Tests
+        working-directory: dashboard
+        run: npm run test:ingestion
+
       - name: Run ESLint
         working-directory: dashboard
         run: npm run lint

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { ChangeEvent, useRef, useEffect, useState } from "react";
-import { DashboardView } from "@/types/dashboard";
+import { DashboardView, LiveRunInfo } from "@/types/dashboard";
 import { useTheme } from "@/lib/theme";
 import {
   Printer,
@@ -17,6 +17,7 @@ import {
   Moon,
   X,
   ChevronDown,
+  RefreshCw,
 } from "lucide-react";
 
 interface TopBarProps {
@@ -29,6 +30,9 @@ interface TopBarProps {
   activeReportKey?: string;
   onSelectSample?: (key: string) => void;
   sampleKeys?: Array<{ key: string; label: string; tag: string }>;
+  onSyncLive?: () => void;
+  isSyncing?: boolean;
+  liveRunInfo?: LiveRunInfo | null;
 }
 
 export function TopBar({
@@ -41,6 +45,9 @@ export function TopBar({
   activeReportKey = "vulnerable",
   onSelectSample,
   sampleKeys = [],
+  onSyncLive,
+  isSyncing = false,
+  liveRunInfo = null,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -193,7 +200,18 @@ export function TopBar({
         )}
 
         {/* Provenance Badge */}
-        {isDemoActive ? (
+        {activeReportKey === "live" && liveRunInfo ? (
+          <a
+            href={liveRunInfo.run.html_url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center space-x-1.5 text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 px-2.5 py-1 rounded-lg font-medium hover:underline"
+            title={`Viewing live report from GitHub Actions Run #${liveRunInfo.run.id} (${liveRunInfo.run.head_sha.slice(0, 7)})`}
+          >
+            <Radio className="w-3 h-3 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+            <span>Live CI Run #{liveRunInfo.run.id}</span>
+          </a>
+        ) : isDemoActive ? (
           <div
             className="flex items-center space-x-1.5 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/80 px-2.5 py-1 rounded-lg font-medium"
             title="Viewing synthetic evaluation dataset for UI inspection"
@@ -204,7 +222,7 @@ export function TopBar({
         ) : (
           <div
             className="flex items-center space-x-1.5 text-xs text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800/80 px-2.5 py-1 rounded-lg font-medium"
-            title="Viewing user uploaded or CI evaluated report JSON"
+            title="Viewing user uploaded report JSON"
           >
             <Database className="w-3 h-3 text-teal-600 dark:text-teal-400" />
             <span>Ingested Run</span>
@@ -270,6 +288,19 @@ export function TopBar({
         >
           <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           <span className="hidden md:inline">Print / PDF</span>
+        </button>
+
+        {/* Sync CI Run */}
+        <button
+          type="button"
+          onClick={onSyncLive}
+          disabled={isSyncing}
+          className="cursor-pointer inline-flex items-center space-x-1.5 text-xs font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 rounded-lg px-2.5 py-1.5 transition-colors shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+          title="Fetch latest verified security report from GitHub Actions"
+          aria-label="Sync CI Run"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-teal-600 dark:text-teal-400 ${isSyncing ? "animate-spin" : ""}`} />
+          <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync CI Run"}</span>
         </button>
 
         {/* Load Report JSON */}

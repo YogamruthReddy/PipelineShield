@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:contract": "node --experimental-strip-types ../scripts/test_dashboard_contract.mjs",
-    "test:nav": "node --experimental-strip-types ../scripts/test_dashboard_navigation.mjs"
+    "test:nav": "node --experimental-strip-types ../scripts/test_dashboard_navigation.mjs",
+    "test:ingestion": "node --experimental-strip-types ../scripts/test_live_ingestion.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.65.0",
