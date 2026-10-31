@@ -2,10 +2,14 @@ name: CI Security Gate
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**", "fix/**", "chore/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -79,6 +83,10 @@ jobs:
         run: npm run test:contract
         env:
           PYTHON: python3
+
+      - name: Run Dashboard Navigation Tests
+        working-directory: dashboard
+        run: npm run test:nav
 
       - name: Run ESLint
         working-directory: dashboard
@@ -208,7 +216,6 @@ jobs:
             $DEP_FLAG \
             --output reports/security-summary.json \
             --summary-md "$GITHUB_STEP_SUMMARY"
-
 
       - name: Upload Security Reports Artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1

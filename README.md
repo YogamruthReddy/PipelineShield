@@ -231,6 +231,18 @@ See [PROJECT_PLAN.md](PROJECT_PLAN.md) for detailed phase criteria.
 
 ---
 
+## 🤝 Contribution & Release Process
+
+PipelineShield enforces a strict, repeatable DevSecOps workflow for every change:
+- **`main` is Protected by Process**: Direct commits, force-pushes, and auto-merges to `main` are strictly prohibited.
+- **Repeatable Verification**: Every change is developed on a scoped branch (`feat/*`, `fix/*`), verified locally, tested in CI across all jobs, and merged via PR after peer review.
+- **Staged Deployment**: Production deployment requires explicit maintainer approval after a clean merge to `main`.
+- **Evidence-Driven**: Milestones and presentation materials are grounded in verified test outputs and real dashboard states.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local verification commands and [docs/EVIDENCE_LOG.md](docs/EVIDENCE_LOG.md) for milestone logs and evidence templates.
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
