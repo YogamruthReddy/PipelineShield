@@ -39,12 +39,24 @@ const FIXTURES_DIR = path.join(ROOT_DIR, "engine", "tests", "fixtures");
 const REPORTS_DIR = path.join(ROOT_DIR, "reports");
 
 // Support configurable Python binary (CI environment vs local .venv)
-const PYTHON =
-  process.env.PYTHON ||
-  process.env.PYTHON_BIN ||
-  (fs.existsSync(path.join(ROOT_DIR, "engine", ".venv", "bin", "python"))
-    ? path.join(ROOT_DIR, "engine", ".venv", "bin", "python")
-    : "python3");
+function resolvePython() {
+  if (process.env.PYTHON) return process.env.PYTHON;
+  if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
+
+  const isWindows = process.platform === "win32";
+  const venvPythonWin = path.join(ROOT_DIR, "engine", ".venv", "Scripts", "python.exe");
+  const venvPythonPosix = path.join(ROOT_DIR, "engine", ".venv", "bin", "python");
+
+  if (isWindows && fs.existsSync(venvPythonWin)) {
+    return venvPythonWin;
+  }
+  if (!isWindows && fs.existsSync(venvPythonPosix)) {
+    return venvPythonPosix;
+  }
+  return isWindows ? "python" : "python3";
+}
+
+const PYTHON = resolvePython();
 
 function runCli(args, expectExit = 0) {
   const policyPath = path.join(ROOT_DIR, "config", "policy.yaml");
