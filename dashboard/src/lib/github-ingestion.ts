@@ -13,6 +13,8 @@
 
 import { extractFileFromZip } from "./zip-extractor.ts";
 import { validateReportSchema } from "./report-validator.ts";
+import { recordRun } from "./run-store.ts";
+import type { EvaluationResult } from "../types/dashboard.ts";
 
 export interface GitHubWorkflowRun {
   id: number;
@@ -45,6 +47,7 @@ export interface GitHubArtifact {
 export interface FetchReportOptions {
   token?: string;
   repo?: string;
+  runId?: number;
   isRefresh?: boolean;
   fetchFn?: typeof fetch;
   timeoutMs?: number;
@@ -128,132 +131,173 @@ export async function fetchLatestGitHubReport(
 
   try {
     // ------------------------------------------------------------------
-    // Step 1: Query GitHub Actions for workflow runs
+    // Step 1: Query GitHub Actions for workflow runs (or specific run)
     // ------------------------------------------------------------------
     const targetWorkflowFile = options.targetWorkflowFile ?? TARGET_WORKFLOW_FILE;
     const targetWorkflowName = options.targetWorkflowName ?? TARGET_WORKFLOW_NAME;
     const targetWorkflowId = options.targetWorkflowId;
 
-    const runsApiUrl = `https://api.github.com/repos/${repo}/actions/runs?per_page=30`;
+    let latestRun: GitHubWorkflowRun;
 
-    const runsResponse = await customFetch(runsApiUrl, {
-      headers: getGitHubHeaders(token),
-      signal: AbortSignal.timeout(timeoutMs),
-      cache: "no-store",
-    });
+    if (options.runId !== undefined) {
+      const singleRunApiUrl = `https://api.github.com/repos/${repo}/actions/runs/${options.runId}`;
+      const singleRunRes = await customFetch(singleRunApiUrl, {
+        headers: getGitHubHeaders(token),
+        signal: AbortSignal.timeout(timeoutMs),
+        cache: "no-store",
+      });
 
-    if (!runsResponse.ok) {
-      if (runsResponse.status === 401) {
-        return {
-          status: 401,
-          body: {
-            success: false,
-            error:
-              "GitHub authentication failed (401). Verify that GITHUB_TOKEN is valid and has not expired or been revoked.",
-          },
-        };
-      }
-      if (runsResponse.status === 403) {
-        const rateRemaining = runsResponse.headers.get("x-ratelimit-remaining");
-        const rateReset = runsResponse.headers.get("x-ratelimit-reset");
-        if (rateRemaining === "0") {
-          const resetDate = rateReset ? new Date(Number(rateReset) * 1000).toISOString() : "soon";
+      if (!singleRunRes.ok) {
+        if (singleRunRes.status === 404) {
           return {
-            status: 429,
+            status: 404,
             body: {
               success: false,
-              error: `GitHub API rate limit exceeded. Limit resets at ${resetDate}.`,
+              error: `Workflow run #${options.runId} not found in repository '${repo}'.`,
             },
           };
         }
         return {
-          status: 403,
+          status: singleRunRes.status >= 500 ? 502 : singleRunRes.status,
           body: {
             success: false,
-            error: `GitHub API access forbidden (403) for repository '${repo}'. Verify token permissions (Actions: Read, Metadata: Read).`,
+            error: `GitHub API returned status ${singleRunRes.status} when querying run #${options.runId}.`,
           },
         };
       }
-      if (runsResponse.status === 404) {
+
+      latestRun = (await singleRunRes.json()) as GitHubWorkflowRun;
+      if (latestRun.status !== "completed") {
+        return {
+          status: 409,
+          body: {
+            success: false,
+            error: `Workflow run #${options.runId} is not completed (status: '${latestRun.status}').`,
+          },
+        };
+      }
+    } else {
+      const runsApiUrl = `https://api.github.com/repos/${repo}/actions/runs?per_page=30`;
+
+      const runsResponse = await customFetch(runsApiUrl, {
+        headers: getGitHubHeaders(token),
+        signal: AbortSignal.timeout(timeoutMs),
+        cache: "no-store",
+      });
+
+      if (!runsResponse.ok) {
+        if (runsResponse.status === 401) {
+          return {
+            status: 401,
+            body: {
+              success: false,
+              error:
+                "GitHub authentication failed (401). Verify that GITHUB_TOKEN is valid and has not expired or been revoked.",
+            },
+          };
+        }
+        if (runsResponse.status === 403) {
+          const rateRemaining = runsResponse.headers.get("x-ratelimit-remaining");
+          const rateReset = runsResponse.headers.get("x-ratelimit-reset");
+          if (rateRemaining === "0") {
+            const resetDate = rateReset ? new Date(Number(rateReset) * 1000).toISOString() : "soon";
+            return {
+              status: 429,
+              body: {
+                success: false,
+                error: `GitHub API rate limit exceeded. Limit resets at ${resetDate}.`,
+              },
+            };
+          }
+          return {
+            status: 403,
+            body: {
+              success: false,
+              error: `GitHub API access forbidden (403) for repository '${repo}'. Verify token permissions (Actions: Read, Metadata: Read).`,
+            },
+          };
+        }
+        if (runsResponse.status === 404) {
+          return {
+            status: 404,
+            body: {
+              success: false,
+              error: `Repository '${repo}' not found on GitHub (404). Check GITHUB_REPOSITORY configuration.`,
+            },
+          };
+        }
+        return {
+          status: 502,
+          body: {
+            success: false,
+            error: `GitHub API returned upstream error ${runsResponse.status}: ${runsResponse.statusText}`,
+          },
+        };
+      }
+
+      const runsData = (await runsResponse.json()) as { workflow_runs?: GitHubWorkflowRun[] };
+      const allRuns = runsData.workflow_runs || [];
+
+      // Filter strictly for completed security gate runs
+      // Hard deterministic targeting:
+      // 1. Matches workflow ID if explicitly specified or present
+      // 2. Matches exact workflow file path (e.g. .github/workflows/security-gate.yml)
+      // 3. Or matches exact canonical workflow title ("CI Security Gate", "Security Gate", "DevSecOps Policy Enforcement Gate")
+      // Include all completed conclusions (success, failure) because policy BLOCK or ERROR gates fail closed with reports
+      const targetWorkflowPath = `.github/workflows/${targetWorkflowFile}`;
+      const eligibleRuns = allRuns.filter((r) => {
+        const isCompleted = r.status === "completed";
+        if (!isCompleted) return false;
+
+        if (targetWorkflowId !== undefined && r.workflow_id !== undefined) {
+          return r.workflow_id === targetWorkflowId;
+        }
+
+        const name = (r.name || "").trim();
+        const path = (r.path || "").trim();
+
+        const matchesPath =
+          Boolean(path) &&
+          (path === targetWorkflowPath ||
+            path.endsWith(`/${targetWorkflowFile}`) ||
+            path === targetWorkflowFile);
+
+        const matchesName =
+          name === targetWorkflowName ||
+          name.toLowerCase() === targetWorkflowName.toLowerCase() ||
+          name === "DevSecOps Policy Enforcement Gate" ||
+          name.toLowerCase() === "devsecops policy enforcement gate" ||
+          name === "Security Gate" ||
+          name.toLowerCase() === "security gate";
+
+        return matchesPath || matchesName;
+      });
+
+      // Hard boundary: Strictly DO NOT fall back to arbitrary unrelated workflows
+      if (eligibleRuns.length === 0) {
         return {
           status: 404,
           body: {
             success: false,
-            error: `Repository '${repo}' not found on GitHub (404). Check GITHUB_REPOSITORY configuration.`,
+            error: `No completed security-gate workflow runs found for repository '${repo}'.`,
           },
         };
       }
-      return {
-        status: 502,
-        body: {
-          success: false,
-          error: `GitHub API returned upstream error ${runsResponse.status}: ${runsResponse.statusText}`,
-        },
-      };
+
+      // Explicitly and deterministically order eligible runs:
+      // 1. Highest run_number first (most recent sequential CI run)
+      // 2. Newest created_at timestamp tie-breaker
+      eligibleRuns.sort((a, b) => {
+        const numA = typeof a.run_number === "number" ? a.run_number : a.id;
+        const numB = typeof b.run_number === "number" ? b.run_number : b.id;
+        if (numB !== numA) {
+          return numB - numA;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+
+      latestRun = eligibleRuns[0];
     }
-
-    const runsData = (await runsResponse.json()) as { workflow_runs?: GitHubWorkflowRun[] };
-    const allRuns = runsData.workflow_runs || [];
-
-    // Filter strictly for completed security gate runs
-    // Hard deterministic targeting:
-    // 1. Matches workflow ID if explicitly specified or present
-    // 2. Matches exact workflow file path (e.g. .github/workflows/security-gate.yml)
-    // 3. Or matches exact canonical workflow title ("CI Security Gate", "Security Gate", "DevSecOps Policy Enforcement Gate")
-    // Include all completed conclusions (success, failure) because policy BLOCK or ERROR gates fail closed with reports
-    const targetWorkflowPath = `.github/workflows/${targetWorkflowFile}`;
-    const eligibleRuns = allRuns.filter((r) => {
-      const isCompleted = r.status === "completed";
-      if (!isCompleted) return false;
-
-      if (targetWorkflowId !== undefined && r.workflow_id !== undefined) {
-        return r.workflow_id === targetWorkflowId;
-      }
-
-      const name = (r.name || "").trim();
-      const path = (r.path || "").trim();
-
-      const matchesPath =
-        Boolean(path) &&
-        (path === targetWorkflowPath ||
-          path.endsWith(`/${targetWorkflowFile}`) ||
-          path === targetWorkflowFile);
-
-      const matchesName =
-        name === targetWorkflowName ||
-        name.toLowerCase() === targetWorkflowName.toLowerCase() ||
-        name === "DevSecOps Policy Enforcement Gate" ||
-        name.toLowerCase() === "devsecops policy enforcement gate" ||
-        name === "Security Gate" ||
-        name.toLowerCase() === "security gate";
-
-      return matchesPath || matchesName;
-    });
-
-    // Hard boundary: Strictly DO NOT fall back to arbitrary unrelated workflows
-    if (eligibleRuns.length === 0) {
-      return {
-        status: 404,
-        body: {
-          success: false,
-          error: `No completed security-gate workflow runs found for repository '${repo}'.`,
-        },
-      };
-    }
-
-    // Explicitly and deterministically order eligible runs:
-    // 1. Highest run_number first (most recent sequential CI run)
-    // 2. Newest created_at timestamp tie-breaker
-    eligibleRuns.sort((a, b) => {
-      const numA = typeof a.run_number === "number" ? a.run_number : a.id;
-      const numB = typeof b.run_number === "number" ? b.run_number : b.id;
-      if (numB !== numA) {
-        return numB - numA;
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-
-    const latestRun = eligibleRuns[0];
 
     // ------------------------------------------------------------------
     // Step 2: Query artifacts for the selected completed run
@@ -456,11 +500,46 @@ export async function fetchLatestGitHubReport(
     }
 
     // ------------------------------------------------------------------
-    // Step 6: Return authoritative live report payload
+    // Step 6: Return authoritative live report payload & record in RunStore
     // ------------------------------------------------------------------
+    const rawReport = reportObj as EvaluationResult;
+    const enrichedReport: EvaluationResult = {
+      ...rawReport,
+      branch: rawReport.branch || latestRun.head_branch,
+      commit_sha: rawReport.commit_sha || latestRun.head_sha,
+    };
+
+    try {
+      recordRun(
+        {
+          id: latestRun.id,
+          name: latestRun.name,
+          status: latestRun.status,
+          conclusion: latestRun.conclusion,
+          html_url: latestRun.html_url,
+          head_sha: latestRun.head_sha,
+          head_branch: latestRun.head_branch,
+          event: latestRun.event,
+          created_at: latestRun.created_at,
+          updated_at: latestRun.updated_at,
+          run_number: latestRun.run_number,
+        },
+        enrichedReport,
+        {
+          id: targetArtifact.id,
+          name: targetArtifact.name,
+          size_in_bytes: targetArtifact.size_in_bytes,
+          expired: targetArtifact.expired,
+          created_at: targetArtifact.created_at,
+        }
+      );
+    } catch {
+      // In-memory run recording is non-blocking
+    }
+
     const responsePayload = {
       success: true,
-      report: reportObj,
+      report: enrichedReport,
       run: {
         id: latestRun.id,
         name: latestRun.name,
@@ -517,4 +596,17 @@ export async function fetchLatestGitHubReport(
       },
     };
   }
+}
+
+/**
+ * Fetch authoritative report artifact for a specific completed GitHub Actions run.
+ */
+export async function fetchGitHubRunReport(
+  runId: number,
+  options: FetchReportOptions = {}
+): Promise<IngestionResult> {
+  return fetchLatestGitHubReport({
+    ...options,
+    runId,
+  });
 }

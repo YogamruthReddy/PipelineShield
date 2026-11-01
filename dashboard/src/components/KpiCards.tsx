@@ -34,27 +34,64 @@ export function KpiCards({ summary, activeCategory, onSelectCategory }: KpiCards
       id: "blocking" as const,
       label: "Blocking Violations",
       value: blocking,
-      subtext: "Strict policy threshold exceeded",
-      badge: blocking > 0 ? "Fails Gate" : "Clean",
-      icon: <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400" />,
-      valueColor: blocking > 0 ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-slate-100",
-      accentBg: blocking > 0 ? "bg-red-50 dark:bg-red-950/50" : "bg-slate-100 dark:bg-slate-800",
-      borderAccent: "hover:border-red-300 dark:hover:border-red-800",
-      activeRing: "ring-2 ring-red-500 dark:ring-red-500",
-      pillBg: blocking > 0 ? "bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
+      subtext: blocking > 0 ? "Strict policy threshold exceeded" : "All policy thresholds satisfied",
+      badge: blocking > 0 ? "Fails Gate" : "Clean (0)",
+      icon:
+        blocking > 0 ? (
+          <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400" />
+        ) : (
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+        ),
+      valueColor:
+        blocking > 0
+          ? "text-red-600 dark:text-red-400"
+          : "text-emerald-600 dark:text-emerald-400",
+      accentBg:
+        blocking > 0
+          ? "bg-red-50 dark:bg-red-950/50"
+          : "bg-emerald-50 dark:bg-emerald-950/50",
+      borderAccent:
+        blocking > 0
+          ? "hover:border-red-300 dark:hover:border-red-800"
+          : "hover:border-emerald-300 dark:hover:border-emerald-800",
+      activeRing:
+        blocking > 0
+          ? "ring-2 ring-red-500 dark:ring-red-500"
+          : "ring-2 ring-emerald-500 dark:ring-emerald-500",
+      pillBg:
+        blocking > 0
+          ? "bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300"
+          : "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300",
     },
     {
       id: "warning" as const,
       label: "Advisory Warnings",
       value: warning,
-      subtext: "Non-blocking security review",
-      badge: warning > 0 ? "Action Recommended" : "None",
-      icon: <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />,
-      valueColor: warning > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-slate-100",
-      accentBg: warning > 0 ? "bg-amber-50 dark:bg-amber-950/50" : "bg-slate-100 dark:bg-slate-800",
-      borderAccent: "hover:border-amber-300 dark:hover:border-amber-800",
+      subtext: warning > 0 ? "Non-blocking security review" : "Zero non-blocking warnings",
+      badge: warning > 0 ? "Action Recommended" : "Zero Warnings",
+      icon:
+        warning > 0 ? (
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        ) : (
+          <Shield className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+        ),
+      valueColor:
+        warning > 0
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-slate-900 dark:text-slate-100",
+      accentBg:
+        warning > 0
+          ? "bg-amber-50 dark:bg-amber-950/50"
+          : "bg-slate-100 dark:bg-slate-800",
+      borderAccent:
+        warning > 0
+          ? "hover:border-amber-300 dark:hover:border-amber-800"
+          : "hover:border-slate-300 dark:hover:border-slate-700",
       activeRing: "ring-2 ring-amber-500 dark:ring-amber-500",
-      pillBg: warning > 0 ? "bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
+      pillBg:
+        warning > 0
+          ? "bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300"
+          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
     },
     {
       id: "exempted" as const,
@@ -90,7 +127,7 @@ export function KpiCards({ summary, activeCategory, onSelectCategory }: KpiCards
             title={`Filter findings by ${c.label}`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 tracking-tight">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 tracking-tight font-subheading">
                 {c.label}
               </span>
               <div
@@ -101,7 +138,7 @@ export function KpiCards({ summary, activeCategory, onSelectCategory }: KpiCards
             </div>
 
             <div className="mt-3 flex items-baseline justify-between">
-              <span className={`text-3xl font-extrabold tracking-tight ${c.valueColor}`}>
+              <span className={`text-3xl font-extrabold tracking-tight font-metric tabular-nums ${c.valueColor}`}>
                 {c.value}
               </span>
               <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80">
@@ -109,7 +146,7 @@ export function KpiCards({ summary, activeCategory, onSelectCategory }: KpiCards
               </span>
             </div>
 
-            <div className="mt-2.5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+            <div className="mt-2.5 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/80 font-body">
               <span className="truncate">{c.subtext}</span>
               <span className="text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-100 group-hover:translate-x-0.5 transition-transform shrink-0 ml-1">
                 <ArrowRight className="w-3.5 h-3.5" />

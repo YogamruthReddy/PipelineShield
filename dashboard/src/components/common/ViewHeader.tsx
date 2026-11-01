@@ -16,7 +16,6 @@ export function ViewHeader({
   icon,
   badge,
   actions,
-  isPresentationTitle = false,
   editorialIntro,
 }: ViewHeaderProps) {
   return (
@@ -30,11 +29,7 @@ export function ViewHeader({
               </div>
             )}
             <h1
-              className={`text-base sm:text-lg tracking-tight leading-snug ${
-                isPresentationTitle
-                  ? "font-presentation-title text-slate-900 dark:text-slate-100"
-                  : "font-bold text-slate-900 dark:text-slate-100 font-sans"
-              }`}
+              className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 font-heading"
             >
               {title}
             </h1>
@@ -42,12 +37,12 @@ export function ViewHeader({
           </div>
 
           {editorialIntro && (
-            <p className="font-editorial-intro text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-body">
               {editorialIntro}
             </p>
           )}
 
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl leading-relaxed font-sans">
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl leading-relaxed font-body">
             {description}
           </p>
         </div>

@@ -1,30 +1,29 @@
 "use client";
 
-import React from "react";
-import { EvaluationResult, ProcessedFinding } from "@/types/dashboard";
+import React, { useState } from "react";
+import { EvaluationResult, ProcessedFinding, LiveRunInfo } from "@/types/dashboard";
 import { VerdictBanner } from "../VerdictBanner";
+import { CiGateEvidenceDrawer } from "../CiGateEvidenceDrawer";
 import { KpiCards } from "../KpiCards";
+import { PrImpactCard } from "../PrImpactCard";
 import { SeverityBadge } from "../SeverityBadge";
 import { ScannerBadge } from "../ScannerBadge";
-import { ViewHeader } from "../common/ViewHeader";
+import { ContextualAIPanel } from "../common/ContextualAIPanel";
 import {
   Activity,
-  Layers,
   ChevronRight,
   ShieldAlert,
   SlidersHorizontal,
   CheckCircle2,
-  XCircle,
   FileCode2,
   Package,
   ShieldCheck,
-  GitCommit,
-  GitBranch,
-  Clock,
   Radio,
-  ExternalLink,
   ArrowRight,
-  Sparkles,
+  AlertCircle,
+  TrendingUp,
+  Cpu,
+  Layers,
 } from "lucide-react";
 
 interface OverviewViewProps {
@@ -36,6 +35,7 @@ interface OverviewViewProps {
   isDemoActive: boolean;
   onNavigateToFindings: (categoryFilter?: string, severityFilter?: string) => void;
   onSelectFinding: (finding: ProcessedFinding) => void;
+  liveRunInfo?: LiveRunInfo | null;
 }
 
 export function OverviewView({
@@ -47,7 +47,11 @@ export function OverviewView({
   isDemoActive,
   onNavigateToFindings,
   onSelectFinding,
+  liveRunInfo,
 }: OverviewViewProps) {
+  const [aiExplainOpen, setAiExplainOpen] = useState(false);
+  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
+
   const summary = report.summary || {
     total_findings: 0,
     critical: 0,
@@ -61,42 +65,10 @@ export function OverviewView({
   };
 
   const blockingFindings = allFindings.filter((f) => f.gateCategory === "blocking");
+  const warningFindings = allFindings.filter((f) => f.gateCategory === "warning");
 
-  const getScannerStatusBadge = (status?: string) => {
-    switch ((status || "").toUpperCase()) {
-      case "COMPLETED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            COMPLETED
-          </span>
-        );
-      case "FAILED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
-            <XCircle className="w-3 h-3 text-red-600 dark:text-red-400" />
-            FAILED
-          </span>
-        );
-      case "DISABLED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-            DISABLED
-          </span>
-        );
-      case "NOT_APPLICABLE":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-            NOT_APPLICABLE
-          </span>
-        );
-      default:
-        return (
-          <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-            {status || "UNKNOWN"}
-          </span>
-        );
-    }
+  const getScannerStatus = (scannerId: string) => {
+    return (report.scanner_status || {})[scannerId] || "COMPLETED";
   };
 
   const severityItems = [
@@ -149,55 +121,244 @@ export function OverviewView({
 
   const totalWeighted = summary.total_findings || 0;
 
+  // Scanner statuses
+  const trivyStatus = getScannerStatus("trivy");
+  const semgrepStatus = getScannerStatus("semgrep");
+  const depReviewStatus = getScannerStatus("dependency_review");
+
   return (
     <div className="space-y-6">
-      {/* Page Header with Integrated Scenario Switcher */}
-      <ViewHeader
-        title="Security Operations Overview"
-        isPresentationTitle={true}
-        editorialIntro="Continuous automated security verification and policy enforcement across CI/CD."
-        description="Real-time gate verdict, scanner health coverage, severity distribution, and blocker triage."
-        icon={<Activity className="w-5 h-5 text-teal-600 dark:text-teal-400" />}
-        badge={
-          isDemoActive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-              <Radio className="w-3 h-3 text-amber-500 animate-pulse" />
-              SYNTHETIC DEMO
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-300 dark:border-teal-800">
-              INGESTED RUN
-            </span>
-          )
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+      {/* Executive Overview Header & Scenario Switcher Card */}
+      <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs transition-colors p-5 sm:p-6">
+        {/* Top Tier: Title, Provenance Badges, and Executive Telemetry Chips */}
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 pb-5 border-b border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-start sm:items-center space-x-3.5 min-w-0">
+            <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800 shadow-2xs shrink-0">
+              <Activity className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 whitespace-nowrap font-heading">
+                  Security Operations Overview
+                </h1>
+                {isDemoActive ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                    <Radio className="w-3 h-3 text-amber-500 animate-pulse" />
+                    SYNTHETIC DEMO
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    LIVE CI DATA
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                Continuous automated security verification, gatekeeper policy enforcement, and scanner telemetry across CI/CD workflows.
+              </p>
+            </div>
+          </div>
+
+          {/* Right Status Metadata: Balanced Telemetry Strip */}
+          <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono self-start xl:self-center shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 shadow-2xs">
+              <span className="text-slate-400">Target:</span>
+              <strong className="text-slate-900 dark:text-slate-100 font-semibold">{report.branch || "main"}</strong>
+              <span className="text-slate-400 font-normal">({report.commit_sha ? report.commit_sha.slice(0, 7) : "HEAD"})</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 shadow-2xs">
+              <span className="text-slate-400">Profile:</span>
+              <span className="text-teal-700 dark:text-teal-300 font-bold">Strict Gatekeeper</span>
+            </div>
+
+            {liveRunInfo && !isDemoActive ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300/80 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Run: <strong>#{liveRunInfo.run.id}</strong></span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-teal-500" />
+                <span>Scanners: <strong>3/3 Active</strong></span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom Tier: Evaluation Scenario Switcher Bar */}
+        <div className="pt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 tracking-tight shrink-0">
+            <Layers className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span>Evaluation Scenarios:</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
+            {liveRunInfo && (
+              <button
+                type="button"
+                onClick={() => onSelectSample("live")}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                  activeReportKey === "live"
+                    ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-bold ring-1 ring-emerald-300 dark:ring-emerald-800"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    activeReportKey === "live" ? "bg-emerald-500 animate-pulse" : "bg-emerald-400"
+                  }`}
+                />
+                <span>Live CI Run #{liveRunInfo.run.id}</span>
+              </button>
+            )}
             {sampleKeys.map((s) => {
               const isSelected = activeReportKey === s.key;
+              const cleanLabel = s.label.replace(/^Demo:\s*/, "");
+              const dotColor =
+                s.tag === "PASS"
+                  ? "bg-emerald-500"
+                  : s.tag === "WARN"
+                  ? "bg-amber-500"
+                  : s.tag === "ERROR"
+                  ? "bg-rose-500"
+                  : "bg-red-500";
+
               return (
                 <button
                   key={s.key}
                   type="button"
                   onClick={() => onSelectSample(s.key)}
-                  className={`text-xs font-medium px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
                     isSelected
-                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs font-bold"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs font-bold ring-1 ring-slate-300 dark:ring-slate-700"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                   }`}
                 >
-                  {s.label}
+                  <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                  <span>{cleanLabel}</span>
                 </button>
               );
             })}
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {/* Primary Verdict Hero Banner */}
       <VerdictBanner
         report={report}
         isDemoActive={isDemoActive}
         onNavigateToBlockers={() => onNavigateToFindings("blocking")}
+        onExplainVerdict={() => setAiExplainOpen(true)}
+        onViewGateEvidence={() => setEvidenceDrawerOpen(true)}
+      />
+
+      {/* Compact Policy Verification & Action Required Card */}
+      <div className={`p-5 rounded-2xl border shadow-xs transition-colors ${
+        blockingFindings.length > 0
+          ? "bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/60"
+          : warningFindings.length > 0
+          ? "bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60"
+          : "bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/60"
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              {blockingFindings.length > 0 ? (
+                <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" />
+              ) : warningFindings.length > 0 ? (
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-subheading">
+                {blockingFindings.length > 0
+                  ? "Action Required: Policy Gate Blockers"
+                  : warningFindings.length > 0
+                  ? "Advisory Review: Policy Warnings"
+                  : "Gate Verification Status: All Checks Passed"}
+              </h3>
+              <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                blockingFindings.length > 0
+                  ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300"
+                  : warningFindings.length > 0
+                  ? "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
+                  : "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+              }`}>
+                {blockingFindings.length > 0
+                  ? `${blockingFindings.length} BLOCKERS`
+                  : warningFindings.length > 0
+                  ? `${warningFindings.length} WARNINGS`
+                  : "ALL CHECKS SATISFIED"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              {blockingFindings.length > 0
+                ? `${blockingFindings.length} blocking security violation(s) violate repository policy thresholds. These must be remediated or waived before pull request merge.`
+                : warningFindings.length > 0
+                ? `${warningFindings.length} non-blocking advisory finding(s) detected. Gate is allowed to pass, but remediation is recommended.`
+                : "No blocking violations or advisory warnings. All automated security checks satisfy configured repository policy thresholds. Gate evaluation cleared for pull request merge."}
+            </p>
+          </div>
+
+          <div className="shrink-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEvidenceDrawerOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5 font-subheading"
+            >
+              <span>Gate Evidence Breakdown</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            {blockingFindings.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => onNavigateToFindings("blocking")}
+                className="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <span>Triage {blockingFindings.length} Blockers</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onNavigateToFindings("ALL")}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
+              >
+                <span>Explore Findings Workspace</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Top Attention Items Preview */}
+        {blockingFindings.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-red-200/60 dark:border-red-900/40 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {blockingFindings.slice(0, 3).map((f) => (
+              <div
+                key={f.id}
+                onClick={() => onSelectFinding(f)}
+                className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-red-200/80 dark:border-red-900/60 hover:border-red-400 cursor-pointer transition-all space-y-1 shadow-2xs"
+              >
+                <div className="flex items-center justify-between text-[11px] font-mono">
+                  <span className="font-bold text-red-700 dark:text-red-400 truncate max-w-[150px]">{f.id}</span>
+                  <span className="text-slate-400">{f.scanner}</span>
+                </div>
+                <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium truncate">{f.title}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* PR Impact & Change Intelligence Card */}
+      <PrImpactCard
+        currentReport={report}
+        onNavigateToFinding={(findingId) => {
+          const finding = allFindings.find((f) => f.id === findingId);
+          if (finding) onSelectFinding(finding);
+        }}
       />
 
       {/* KPI Cards */}
@@ -215,7 +376,7 @@ export function OverviewView({
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center space-x-2">
                 <SlidersHorizontal className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 font-subheading">
                   Severity Spectrum & Distribution
                 </h2>
               </div>
@@ -227,7 +388,6 @@ export function OverviewView({
             {/* Visual Multi-Segment Distribution Bar */}
             {totalWeighted > 0 ? (
               <div className="mt-4 space-y-4">
-                {/* Segmented Bar with Tooltip Information */}
                 <div className="h-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex shadow-inner p-0.5 gap-0.5">
                   {severityItems.map((s) => {
                     if (s.count === 0) return null;
@@ -284,7 +444,7 @@ export function OverviewView({
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center space-x-2">
                 <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400" />
-                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 font-subheading">
                   Priority Gate-Blocking Issues ({blockingFindings.length})
                 </h2>
               </div>
@@ -348,7 +508,7 @@ export function OverviewView({
                     No Blocking Violations Detected
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Pull request complies with all configured strict gate policies.
+                    All findings satisfy repository gatekeeper thresholds.
                   </p>
                 </div>
               )}
@@ -356,132 +516,167 @@ export function OverviewView({
           </div>
         </div>
 
-        {/* Right Column: Automated Scanner Execution Health & Pipeline Provenance */}
+        {/* Right Column: Scanner Coverage & Evaluation Trend */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Scanner Execution Health */}
-          <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs transition-colors">
+          {/* Scanner Coverage & Health Card */}
+          <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                  Automated Scanner Health
+                <Cpu className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 font-subheading">
+                  Automated Scanner Health & Coverage
                 </h2>
               </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                CI/CD Gate
+              <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                100% COVERAGE
               </span>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {/* Trivy */}
-              <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between shadow-2xs">
-                <div className="space-y-1">
-                  <div className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">trivy</span>
-                    <span className="text-[10px] text-slate-400 font-sans font-normal">
-                      (SCA / Secrets / IaC)
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {allFindings.filter((f) => f.scanner === "trivy").length} findings detected
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">Trivy Scanner</span>
+                    <span className="text-[10px] text-slate-500">SCA, Containers & Exposed Secrets</span>
                   </div>
                 </div>
-                {getScannerStatusBadge(report.scanner_status?.trivy)}
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                  {trivyStatus}
+                </span>
               </div>
 
-              {/* Semgrep */}
-              <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between shadow-2xs">
-                <div className="space-y-1">
-                  <div className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">semgrep</span>
-                    <span className="text-[10px] text-slate-400 font-sans font-normal">
-                      (SAST Static Code)
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {allFindings.filter((f) => f.scanner === "semgrep").length} findings detected
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">Semgrep SAST</span>
+                    <span className="text-[10px] text-slate-500">Semantic Static Code Analysis</span>
                   </div>
                 </div>
-                {getScannerStatusBadge(report.scanner_status?.semgrep)}
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                  {semgrepStatus}
+                </span>
               </div>
 
-              {/* Dependency Review */}
-              <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between shadow-2xs">
-                <div className="space-y-1">
-                  <div className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">dependency_review</span>
-                    <span className="text-[10px] text-slate-400 font-sans font-normal">
-                      (Supply Chain PR Diff)
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {allFindings.filter((f) => f.scanner === "dependency_review").length} findings detected
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">Dependency Review</span>
+                    <span className="text-[10px] text-slate-500">PR Dependency Diffs & Licenses</span>
                   </div>
                 </div>
-                {getScannerStatusBadge(report.scanner_status?.dependency_review)}
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  {depReviewStatus}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Audit Telemetry & Provenance */}
-          <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs transition-colors space-y-3">
+          {/* Recent Evaluation Trajectory */}
+          <div className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800">
-              <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
-                <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span>Evaluation Telemetry</span>
-              </h2>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                Contract v0.1.0
+              <div className="flex items-center space-x-2">
+                <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 font-subheading">
+                  {isDemoActive ? "Synthetic Demonstration Trajectory" : "Active Ingested Run Evaluation"}
+                </h2>
+              </div>
+              <span className="text-xs font-mono text-slate-400">
+                {isDemoActive ? "Baseline Demo Progression" : "Live CI Telemetry"}
               </span>
             </div>
 
-            <div className="text-xs space-y-2.5 text-slate-600 dark:text-slate-300">
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/60">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
-                  <GitBranch className="w-3.5 h-3.5" />
-                  <span>Target Branch:</span>
-                </span>
-                <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
-                  {report.branch || "main"}
-                </span>
-              </div>
+            {isDemoActive ? (
+              <div className="space-y-3 text-xs">
+                <div className="text-[11px] text-slate-500 italic pb-0.5">
+                  Synthetic reference progression demonstrating evaluation verdicts across three sample PR states:
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-red-200/60 dark:border-red-950 bg-red-50/20 dark:bg-red-950/20">
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">1. Initial PR Check (#1)</div>
+                    <div className="text-[11px] text-slate-500 font-mono">3 Blockers (CVE-2022-42966, command injection)</div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
+                    BLOCK
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/60">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
-                  <GitCommit className="w-3.5 h-3.5" />
-                  <span>Commit SHA:</span>
-                </span>
-                <span className="font-mono text-slate-900 dark:text-slate-100 font-semibold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                  {report.commit_sha ? report.commit_sha.slice(0, 7) : "N/A (Synthetic)"}
-                </span>
-              </div>
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-amber-200/60 dark:border-amber-950 bg-amber-50/20 dark:bg-amber-950/20">
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">2. Advisory Remediation (#2)</div>
+                    <div className="text-[11px] text-slate-500 font-mono">0 Blockers, 1 Advisory (TLS socket review)</div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    WARN
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/60">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Evaluated At:</span>
-                </span>
-                <span className="font-mono text-[11px] text-slate-900 dark:text-slate-100">
-                  {report.evaluated_at ? new Date(report.evaluated_at).toLocaleString() : "2026-10-30T18:00:00Z"}
-                </span>
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/60 dark:border-emerald-950 bg-emerald-50/20 dark:bg-emerald-950/20">
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">3. Verified Target Baseline</div>
+                    <div className="text-[11px] text-slate-500 font-mono">0 Blockers, 0 Warnings, 100% Policy Pass</div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    PASS
+                  </span>
+                </div>
               </div>
-
-              <div className="flex items-center justify-between py-1">
-                <span className="text-slate-500 dark:text-slate-400">Canonical Repo:</span>
-                <a
-                  href="https://github.com/YogamruthReddy/PipelineShield"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-teal-600 dark:text-teal-400 hover:underline flex items-center space-x-1"
-                >
-                  <span>YogamruthReddy/PipelineShield</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-xl border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/30 dark:bg-emerald-950/20 space-y-2">
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">
+                      Run #{liveRunInfo ? liveRunInfo.run.id : "Ingested Report"}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      report.decision === "BLOCK"
+                        ? "bg-red-100 text-red-700"
+                        : report.decision === "WARN"
+                        ? "bg-amber-100 text-amber-700"
+                        : report.decision === "ERROR"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-emerald-100 text-emerald-700"
+                    }`}>
+                      {report.decision}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 font-mono space-y-1">
+                    <div>Branch: {liveRunInfo ? liveRunInfo.run.head_branch : (report.branch || "Not specified")}</div>
+                    <div>Commit: {liveRunInfo ? liveRunInfo.run.head_sha.slice(0, 7) : (report.commit_sha || "Not specified")}</div>
+                    <div>Total findings: {report.summary?.total_findings ?? 0} ({report.summary?.blocking_count ?? 0} blocking)</div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  To view comparative deltas between runs or evaluate historical executions, navigate to the <strong>CI/CD Runs</strong> tab.
+                </p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* CI Gate Decision & Evidence Drawer */}
+      <CiGateEvidenceDrawer
+        isOpen={evidenceDrawerOpen}
+        onClose={() => setEvidenceDrawerOpen(false)}
+        report={report}
+        allFindings={allFindings}
+        onSelectFinding={onSelectFinding}
+        onExplainWithAi={() => setAiExplainOpen(true)}
+        isDemoActive={isDemoActive}
+      />
+
+      {/* Contextual AI Verdict Investigation Panel */}
+      <ContextualAIPanel
+        isOpen={aiExplainOpen}
+        onClose={() => setAiExplainOpen(false)}
+        action="explain_verdict"
+        title="AI Security Gate Verdict Analysis"
+        subtitle="Plain-language explanation of gate rules, blocking violations, and reviewer action items"
+        report={report}
+      />
     </div>
   );
 }

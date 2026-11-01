@@ -3,6 +3,7 @@
 import React from "react";
 import { ViewHeader } from "../common/ViewHeader";
 import { useTheme, Theme } from "@/lib/theme";
+import { TYPOGRAPHY_ROLES } from "@/lib/font-config";
 import {
   Settings,
   Shield,
@@ -12,6 +13,7 @@ import {
   Moon,
   Laptop,
   Command,
+  Type,
 } from "lucide-react";
 
 export function SettingsView() {
@@ -91,6 +93,61 @@ export function SettingsView() {
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* Role-Based Typography System Architecture */}
+      <div className="bg-white dark:bg-[#111827] rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs space-y-4 transition-colors">
+        <div className="space-y-1">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 font-subheading">
+            <Type className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span>Role-Based Typography System</span>
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-body">
+            Consistent visual hierarchy with dedicated font assignments per content role. Code and technical elements strictly retain monospace styling.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {TYPOGRAPHY_ROLES.map((r) => (
+            <div
+              key={r.id}
+              className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-2 flex flex-col justify-between"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 font-subheading">
+                    {r.name}
+                  </span>
+                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                    {r.id}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug font-body">
+                  {r.description}
+                </p>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono truncate">
+                  Scope: {r.targetElements}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80">
+                <div
+                  className={`text-xs p-2 rounded bg-white dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 truncate ${
+                    r.id === "heading"
+                      ? "font-heading font-bold"
+                      : r.id === "mono"
+                      ? "font-mono"
+                      : r.id === "metric"
+                      ? "font-metric font-bold"
+                      : "font-body"
+                  }`}
+                >
+                  {r.sampleText}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

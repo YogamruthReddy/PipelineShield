@@ -96,3 +96,7 @@ Thumbs.db
 *.swo
 *~
 image.png
+
+# Durable Storage & Ingested CI Scan Records
+data/
+dashboard/data/

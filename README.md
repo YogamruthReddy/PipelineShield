@@ -100,6 +100,9 @@ PipelineShield/
 
 ## 🚀 Running Scanners & Engine Locally
 
+> 💡 **For a complete, step-by-step execution guide across all environments (Local UI quickstart, Python CLI, live GitHub sync, webhooks, local AI copilot, and CI/CD), see [HOW_TO_RUN.md](HOW_TO_RUN.md).**
+
+
 ### Prerequisites
 
 - **Python**: 3.11+

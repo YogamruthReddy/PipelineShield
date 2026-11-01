@@ -4,12 +4,19 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test:contract": "node --experimental-strip-types ../scripts/test_dashboard_contract.mjs",
     "test:nav": "node --experimental-strip-types ../scripts/test_dashboard_navigation.mjs",
-    "test:ingestion": "node --experimental-strip-types ../scripts/test_live_ingestion.mjs"
+    "test:ingestion": "node --experimental-strip-types ../scripts/test_live_ingestion.mjs",
+    "test:ai": "node --experimental-strip-types ../scripts/test_local_ai.mjs",
+    "test:webhook": "node --experimental-strip-types ../scripts/test_github_webhook.mjs",
+    "test:phase1": "node --experimental-strip-types ../scripts/test_phase1_reliability.mjs",
+    "test:phase2": "node --experimental-strip-types ../scripts/test_phase2_actionable_findings.mjs",
+    "test:actions": "node --experimental-strip-types ../scripts/test_contextual_actions_safety.mjs",
+    "test:github": "node --experimental-strip-types ../scripts/test_github_workspace.mjs",
+    "test:review": "node --experimental-strip-types ../scripts/test_code_review_workspace.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.65.0",

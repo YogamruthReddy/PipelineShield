@@ -146,7 +146,9 @@ export function TopBar({
             >
               <span
                 className={`w-2 h-2 rounded-full ${
-                  activeReportKey === "custom"
+                  activeReportKey === "live"
+                    ? "bg-emerald-500 animate-pulse"
+                    : activeReportKey === "custom"
                     ? "bg-teal-500"
                     : activeReportKey === "clean"
                     ? "bg-emerald-500"
@@ -154,11 +156,15 @@ export function TopBar({
                     ? "bg-amber-500"
                     : activeReportKey === "scanner_error"
                     ? "bg-rose-500"
-                    : "bg-red-500"
+                    : activeReportKey === "vulnerable"
+                    ? "bg-red-500"
+                    : "bg-emerald-500"
                 }`}
               />
               <span className="font-semibold truncate max-w-[170px]">
-                {activeReportKey === "custom"
+                {activeReportKey === "live"
+                  ? "Live CI Data"
+                  : activeReportKey === "custom"
                   ? "Ingested Custom Report"
                   : currentSample?.label || "Select Dataset"}
               </span>
@@ -168,8 +174,30 @@ export function TopBar({
             {datasetDropdownOpen && (
               <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-[#111827] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl py-1.5 z-50">
                 <div className="px-3 py-1 text-[10px] font-mono font-semibold uppercase text-slate-400 dark:text-slate-500">
-                  Evaluation Scenario Datasets
+                  Data Sources & Scenarios
                 </div>
+                {liveRunInfo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectSample("live");
+                      setDatasetDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer ${
+                      activeReportKey === "live"
+                        ? "bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold"
+                        : "text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 truncate">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Live CI Run #{liveRunInfo.run.id}</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800">
+                      LIVE
+                    </span>
+                  </button>
+                )}
                 {sampleKeys.map((s) => (
                   <button
                     key={s.key}
@@ -240,10 +268,10 @@ export function TopBar({
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search findings... (Ctrl+K)"
+            placeholder="Search findings..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-36 sm:w-48 md:w-56 pl-8 pr-12 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all shadow-2xs"
+            className="w-36 sm:w-48 md:w-56 pl-8 pr-14 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all shadow-2xs"
             aria-label="Search security findings"
           />
           <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
@@ -257,8 +285,8 @@ export function TopBar({
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
-              <kbd className="hidden sm:inline-block text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-400 rounded px-1 leading-tight">
-                /
+              <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 rounded px-1.5 py-0.5 leading-tight shadow-2xs">
+                Ctrl+K
               </kbd>
             )}
           </div>
